@@ -13,6 +13,7 @@
 #include "context.hpp"
 #include "parser.hpp"
 #include "sass_functions.hpp"
+#include "error_handling.hpp"
 
 namespace Sass {
 
@@ -258,9 +259,9 @@ namespace Sass {
   {
     ExpressionObj mq = eval(m->schema());
     sass::string str_mq(mq->to_css(ctx.c_options));
-    char* str = sass_copy_c_string(str_mq.c_str());
-    ctx.strings.push_back(str);
-    Parser parser(Parser::from_c_str(str, ctx, traces, mq->pstate()));
+    ItplFile* source = SASS_MEMORY_NEW(ItplFile,
+      str_mq.c_str(), m->pstate());
+    Parser parser(source, ctx, traces);
     // Create a new CSS only representation of the media rule
     CssMediaRuleObj css = SASS_MEMORY_NEW(CssMediaRule, m->pstate(), m->block());
     sass::vector<CssMediaQuery_Obj> parsed = parser.parseCssMediaQueries();
@@ -358,6 +359,12 @@ namespace Sass {
     Env* env = environment();
     const sass::string& var(a->variable());
     if (a->is_global()) {
+      if (!env->has_global(var)) {
+        deprecated(
+          "!global assignments won't be able to declare new variables in future versions.",
+          "Consider adding `" + var + ": null` at the top level.",
+          true, a->pstate());
+      }
       if (a->is_default()) {
         if (env->has_global(var)) {
           ExpressionObj e = Cast<Expression>(env->get_global(var));
@@ -629,10 +636,9 @@ namespace Sass {
             env.set_local(variables[0], var);
           } else {
             for (size_t j = 0, K = variables.size(); j < K; ++j) {
-              ExpressionObj res = j >= scalars->length()
+              env.set_local(variables[j], j >= scalars->length()
                 ? SASS_MEMORY_NEW(Null, expr->pstate())
-                : (*scalars)[j]->perform(&eval);
-              env.set_local(variables[j], res);
+                : (*scalars)[j]->perform(&eval));
             }
           }
         } else {
@@ -786,9 +792,9 @@ namespace Sass {
     traces.push_back(Backtrace(c->pstate(), msg));
     ctx.callee_stack.push_back({
       c->name().c_str(),
-      c->pstate().path,
-      c->pstate().line + 1,
-      c->pstate().column + 1,
+      c->pstate().getPath(),
+      c->pstate().getLine(),
+      c->pstate().getColumn(),
       SASS_CALLEE_MIXIN,
       { env }
     });

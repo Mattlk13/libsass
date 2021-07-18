@@ -99,6 +99,8 @@ namespace Sass {
     HASH_PROPERTY(bool, has_ns)
   public:
     SimpleSelector(SourceSpan pstate, sass::string n = "");
+    // ordering within parent (peudos go last)
+    virtual int getSortOrder() const = 0;
     virtual sass::string ns_name() const;
     size_t hash() const override;
     virtual bool empty() const;
@@ -147,6 +149,7 @@ namespace Sass {
   class PlaceholderSelector final : public SimpleSelector {
   public:
     PlaceholderSelector(SourceSpan pstate, sass::string n);
+    int getSortOrder() const override final { return 0; }
     bool isInvisible() const override { return true; }
     virtual unsigned long specificity() const override;
     virtual bool has_placeholder() override;
@@ -162,6 +165,7 @@ namespace Sass {
   class TypeSelector final : public SimpleSelector {
   public:
     TypeSelector(SourceSpan pstate, sass::string n);
+    int getSortOrder() const override final { return 1; }
     virtual unsigned long specificity() const override;
     SimpleSelector* unifyWith(const SimpleSelector*);
     CompoundSelector* unifyWith(CompoundSelector*) override;
@@ -178,6 +182,7 @@ namespace Sass {
   class ClassSelector final : public SimpleSelector {
   public:
     ClassSelector(SourceSpan pstate, sass::string n);
+    int getSortOrder() const override final { return 2; }
     virtual unsigned long specificity() const override;
     bool operator==(const SimpleSelector& rhs) const final override;
     ATTACH_CMP_OPERATIONS(ClassSelector)
@@ -191,6 +196,7 @@ namespace Sass {
   class IDSelector final : public SimpleSelector {
   public:
     IDSelector(SourceSpan pstate, sass::string n);
+    int getSortOrder() const override final { return 2; }
     virtual unsigned long specificity() const override;
     CompoundSelector* unifyWith(CompoundSelector*) override;
     IDSelector* getIdSelector() final override { return this; }
@@ -210,6 +216,7 @@ namespace Sass {
     ADD_PROPERTY(char, modifier);
   public:
     AttributeSelector(SourceSpan pstate, sass::string n, sass::string m, String_Obj v, char o = 0);
+    int getSortOrder() const override final { return 2; }
     size_t hash() const override;
     virtual unsigned long specificity() const override;
     bool operator==(const SimpleSelector& rhs) const final override;
@@ -230,6 +237,7 @@ namespace Sass {
     ADD_PROPERTY(bool, isClass)
   public:
     PseudoSelector(SourceSpan pstate, sass::string n, bool element = false);
+    int getSortOrder() const override final { return 3; }
     virtual bool is_pseudo_element() const override;
     size_t hash() const override;
 
@@ -265,16 +273,17 @@ namespace Sass {
   // Between each item there is an implicit ancestor of combinator
   ////////////////////////////////////////////////////////////////////////////
   class ComplexSelector final : public Selector, public Vectorized<SelectorComponentObj> {
-    ADD_PROPERTY(bool, chroots)
+    ADD_PROPERTY(bool, chroots);
     // line break before list separator
-    ADD_PROPERTY(bool, hasPreLineFeed)
+    ADD_PROPERTY(bool, hasPreLineFeed);
   public:
     ComplexSelector(SourceSpan pstate);
 
     // Returns true if the first components
-    // is a compound selector and fullfills
+    // is a compound selector and fulfills
     // a few other criteria.
     bool isInvisible() const;
+    bool isInvalidCss() const;
 
     size_t hash() const override;
     void cloneChildren() override;
@@ -405,12 +414,11 @@ namespace Sass {
   ////////////////////////////////////////////////////////////////////////////
   class CompoundSelector final : public SelectorComponent, public Vectorized<SimpleSelectorObj> {
     ADD_PROPERTY(bool, hasRealParent)
-    ADD_PROPERTY(bool, extended)
   public:
     CompoundSelector(SourceSpan pstate, bool postLineBreak = false);
 
     // Returns true if this compound selector
-    // fullfills various criteria.
+    // fulfills various criteria.
     bool isInvisible() const;
 
     bool empty() const override {
@@ -444,6 +452,9 @@ namespace Sass {
     bool operator==(const SelectorList& rhs) const;
     bool operator==(const ComplexSelector& rhs) const;
     bool operator==(const SimpleSelector& rhs) const;
+
+    void sortChildren();
+    bool isInvalidCss() const;
 
     ATTACH_CMP_OPERATIONS(CompoundSelector)
     ATTACH_AST_OPERATIONS(CompoundSelector)

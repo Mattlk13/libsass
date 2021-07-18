@@ -1,9 +1,11 @@
 #ifndef SASS_MEMORY_POOL_H
 #define SASS_MEMORY_POOL_H
 
-#include "../sass.hpp"
-#include "../memory.hpp"
+#include <stdlib.h>
+#include <iostream>
+#include <algorithm>
 #include <climits>
+#include <vector>
 
 namespace Sass {
 
@@ -53,7 +55,10 @@ namespace Sass {
     std::vector<void*> arenas;
 
     // One pointer for every bucket (zero init)
-    void* freeList[SassAllocatorBuckets] = {};
+    #ifdef _MSC_VER
+    #pragma warning (suppress:4351)
+    #endif
+    void* freeList[SassAllocatorBuckets]{};
 
     // Increase the address until it sits on a
     // memory aligned address (maybe use `aligned`).

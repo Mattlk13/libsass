@@ -81,20 +81,18 @@ namespace Sass {
     virtual sass::string to_string() const;
     virtual void cloneChildren() {};
     // generic find function (not fully implemented yet)
-    // ToDo: add specific implementions to all children
+    // ToDo: add specific implementations to all children
     virtual bool find ( bool (*f)(AST_Node_Obj) ) { return f(this); };
     void update_pstate(const SourceSpan& pstate);
-    Offset off() { return pstate(); }
-    Position pos() { return pstate(); }
 
-    // Some obects are not meant to be compared
-    // ToDo: maybe fallback to pointer comparison?
+    // Some objects are not meant to be compared
+    // ToDo: maybe fall-back to pointer comparison?
     virtual bool operator== (const AST_Node& rhs) const {
       throw std::runtime_error("operator== not implemented");
     }
 
     // We can give some reasonable implementations by using
-    // inverst operators on the specialized implementations
+    // invert operators on the specialized implementations
     virtual bool operator!= (const AST_Node& rhs) const {
       // Unequal if not equal
       return !(*this == rhs);
@@ -360,7 +358,7 @@ namespace Sass {
   class Hashed {
   private:
     std::unordered_map<
-      K, T, ObjHash, ObjEquality
+      K, T, ObjHash, ObjHashEquality
     > elements_;
 
     sass::vector<K> _keys;
@@ -398,7 +396,7 @@ namespace Sass {
     bool has_duplicate_key() const         { return duplicate_key_ != nullptr; }
     K get_duplicate_key() const  { return duplicate_key_; }
     const std::unordered_map<
-      K, T, ObjHash, ObjEquality
+      K, T, ObjHash, ObjHashEquality
     >& elements() { return elements_; }
     Hashed& operator<<(std::pair<K, T> p)
     {
@@ -434,7 +432,7 @@ namespace Sass {
       return *this;
     }
     const std::unordered_map<
-      K, T, ObjHash, ObjEquality
+      K, T, ObjHash, ObjHashEquality
     >& pairs() const { return elements_; }
 
     const sass::vector<K>& keys() const { return _keys; }

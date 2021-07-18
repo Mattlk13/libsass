@@ -86,7 +86,7 @@ namespace Sass {
 
     if (parent()->statement_type() == Statement::RULESET)
     {
-      return (r->is_keyframes()) ? SASS_MEMORY_NEW(Bubble, r->pstate(), r) : bubble(r);
+      return r->is_keyframes() ? SASS_MEMORY_NEW(Bubble, r->pstate(), r) : bubble(r);
     }
 
     p_stack.push_back(r);
@@ -380,7 +380,7 @@ namespace Sass {
 
   bool Cssize::bubblable(Statement* s)
   {
-    return Cast<StyleRule>(s) || s->bubbles();
+    return Cast<StyleRule>(s) || (s && s->bubbles());
   }
 
   Block* Cssize::flatten(const Block* b)
@@ -479,7 +479,8 @@ namespace Sass {
                                     children->pstate(),
                                     children->length(),
                                     children->is_root());
-        bb->append(ss->perform(this));
+        auto evaled = ss->perform(this);
+        if (evaled) bb->append(evaled);
 
         Block_Obj wrapper_block = SASS_MEMORY_NEW(Block,
                                               children->pstate(),

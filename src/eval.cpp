@@ -30,6 +30,7 @@
 #include "expand.hpp"
 #include "color_maps.hpp"
 #include "sass_functions.hpp"
+#include "error_handling.hpp"
 #include "util_string.hpp"
 
 namespace Sass {
@@ -92,6 +93,12 @@ namespace Sass {
     Env* env = environment();
     sass::string var(a->variable());
     if (a->is_global()) {
+      if (!env->has_global(var)) {
+        deprecated(
+          "!global assignments won't be able to declare new variables in future versions.",
+          "Consider adding `" + var + ": null` at the top level.",
+          true, a->pstate());
+      }
       if (a->is_default()) {
         if (env->has_global(var)) {
           Expression* e = Cast<Expression>(env->get_global(var));
@@ -281,12 +288,10 @@ namespace Sass {
             Expression* var = scalars;
             env.set_local(variables[0], var);
           } else {
-            // XXX: this is never hit via spec tests
+            // https://github.com/sass/libsass/issues/3078
             for (size_t j = 0, K = variables.size(); j < K; ++j) {
-              Expression* res = j >= scalars->length()
-                ? SASS_MEMORY_NEW(Null, expr->pstate())
-                : scalars->at(j);
-              env.set_local(variables[j], res);
+              env.set_local(variables[j], j >= scalars->length()
+                ? SASS_MEMORY_NEW(Null, expr->pstate()) : scalars->at(j));
             }
           }
         } else {
@@ -344,9 +349,9 @@ namespace Sass {
       // add call stack entry
       callee_stack().push_back({
         "@warn",
-        w->pstate().path,
-        w->pstate().line + 1,
-        w->pstate().column + 1,
+        w->pstate().getPath(),
+        w->pstate().getLine(),
+        w->pstate().getColumn(),
         SASS_CALLEE_FUNCTION,
         { env }
       });
@@ -392,9 +397,9 @@ namespace Sass {
       // add call stack entry
       callee_stack().push_back({
         "@error",
-        e->pstate().path,
-        e->pstate().line + 1,
-        e->pstate().column + 1,
+        e->pstate().getPath(),
+        e->pstate().getLine(),
+        e->pstate().getColumn(),
         SASS_CALLEE_FUNCTION,
         { env }
       });
@@ -436,9 +441,9 @@ namespace Sass {
       // add call stack entry
       callee_stack().push_back({
         "@debug",
-        d->pstate().path,
-        d->pstate().line + 1,
-        d->pstate().column + 1,
+        d->pstate().getPath(),
+        d->pstate().getLine(),
+        d->pstate().getColumn(),
         SASS_CALLEE_FUNCTION,
         { env }
       });
@@ -462,12 +467,12 @@ namespace Sass {
     }
 
     sass::string result(unquote(message->to_sass()));
-    sass::string abs_path(Sass::File::rel2abs(d->pstate().path, cwd(), cwd()));
-    sass::string rel_path(Sass::File::abs2rel(d->pstate().path, cwd(), cwd()));
-    sass::string output_path(Sass::File::path_for_console(rel_path, abs_path, d->pstate().path));
+    sass::string abs_path(Sass::File::rel2abs(d->pstate().getPath(), cwd(), cwd()));
+    sass::string rel_path(Sass::File::abs2rel(d->pstate().getPath(), cwd(), cwd()));
+    sass::string output_path(Sass::File::path_for_console(rel_path, abs_path, d->pstate().getPath()));
     options().output_style = outstyle;
 
-    std::cerr << output_path << ":" << d->pstate().line+1 << " DEBUG: " << result;
+    std::cerr << output_path << ":" << d->pstate().getLine() << " DEBUG: " << result;
     std::cerr << std::endl;
     return 0;
   }
@@ -1043,9 +1048,9 @@ namespace Sass {
       traces.push_back(Backtrace(c->pstate(), msg));
       callee_stack().push_back({
         c->name().c_str(),
-        c->pstate().path,
-        c->pstate().line + 1,
-        c->pstate().column + 1,
+        c->pstate().getPath(),
+        c->pstate().getLine(),
+        c->pstate().getColumn(),
         SASS_CALLEE_FUNCTION,
         { env }
       });
@@ -1083,9 +1088,9 @@ namespace Sass {
       traces.push_back(Backtrace(c->pstate(), msg));
       callee_stack().push_back({
         c->name().c_str(),
-        c->pstate().path,
-        c->pstate().line + 1,
-        c->pstate().column + 1,
+        c->pstate().getPath(),
+        c->pstate().getLine(),
+        c->pstate().getColumn(),
         SASS_CALLEE_C_FUNCTION,
         { env }
       });
@@ -1122,7 +1127,7 @@ namespace Sass {
 
     // link back to function definition
     // only do this for custom functions
-    if (result->pstate().file == sass::string::npos)
+    if (result->pstate().getSrcId() == sass::string::npos)
       result->pstate(c->pstate());
 
     result = result->perform(this);
@@ -1286,7 +1291,8 @@ namespace Sass {
     }
     if (!s->is_interpolant()) {
       if (s->length() > 1 && res == "") return SASS_MEMORY_NEW(Null, s->pstate());
-      return SASS_MEMORY_NEW(String_Constant, s->pstate(), res, s->css());
+      String_Constant_Obj str = SASS_MEMORY_NEW(String_Constant, s->pstate(), res, s->css());
+      return str.detach();
     }
     // string schema seems to have a special unquoting behavior (also handles "nested" quotes)
     String_Quoted_Obj str = SASS_MEMORY_NEW(String_Quoted, s->pstate(), res, 0, false, false, false, s->css());
@@ -1503,9 +1509,9 @@ namespace Sass {
     ExpressionObj sel = s->contents()->perform(this);
     sass::string result_str(sel->to_string(options()));
     result_str = unquote(Util::rtrim(result_str));
-    char* temp_cstr = sass_copy_c_string(result_str.c_str());
-    ctx.strings.push_back(temp_cstr); // attach to context
-    Parser p = Parser::from_c_str(temp_cstr, ctx, traces, s->pstate());
+    ItplFile* source = SASS_MEMORY_NEW(ItplFile,
+      result_str.c_str(), s->pstate());
+    Parser p(source, ctx, traces);
 
     // If a schema contains a reference to parent it is already
     // connected to it, so don't connect implicitly anymore

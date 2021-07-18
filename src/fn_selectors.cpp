@@ -36,7 +36,8 @@ namespace Sass {
           str->quote_mark(0);
         }
         sass::string exp_src = exp->to_string(ctx.c_options);
-        SelectorListObj sel = Parser::parse_selector(exp_src.c_str(), ctx, traces);
+        ItplFile* source = SASS_MEMORY_NEW(ItplFile, exp_src.c_str(), exp->pstate());
+        SelectorListObj sel = Parser::parse_selector(source, ctx, traces);
         parsedSelectors.push_back(sel);
       }
 
@@ -90,13 +91,12 @@ namespace Sass {
           str->quote_mark(0);
         }
         sass::string exp_src = exp->to_string();
-        SelectorListObj sel = Parser::parse_selector(exp_src.c_str(), ctx, traces,
-                                                     exp->pstate(), pstate.src,
-                                                     /*allow_parent=*/true);
+        ItplFile* source = SASS_MEMORY_NEW(ItplFile, exp_src.c_str(), exp->pstate());
+        SelectorListObj sel = Parser::parse_selector(source, ctx, traces, true);
 
         for (auto& complex : sel->elements()) {
           if (complex->empty()) {
-            complex->append(SASS_MEMORY_NEW(CompoundSelector, "[phony]"));
+            complex->append(SASS_MEMORY_NEW(CompoundSelector, "[append]"));
           }
           if (CompoundSelector* comp = Cast<CompoundSelector>(complex->first())) {
             comp->hasRealParent(true);
